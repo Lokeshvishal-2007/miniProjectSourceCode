@@ -3,6 +3,8 @@
 // be placed in the file, and deletes data previously in the file.
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <string.h>
 // clientData structure definition
 struct clientData
 {
@@ -10,7 +12,7 @@ struct clientData
     char lastName[15];    // account last name
     char firstName[10];   // account first name
     double balance;       // account balance
-};                        // end structure clientData
+}; // end structure clientData
 
 // prototypes
 unsigned int enterChoice(void);
@@ -18,6 +20,9 @@ void textFile(FILE *readPtr);
 void updateRecord(FILE *fPtr);
 void newRecord(FILE *fPtr);
 void deleteRecord(FILE *fPtr);
+int isAllDigits(const char *text);
+int isAllLetters(const char *text);
+int readValidAccountNumber(unsigned int *accountNum, const char *prompt);
 
 int main(int argc, char *argv[])
 {
@@ -57,7 +62,7 @@ int main(int argc, char *argv[])
             puts("Incorrect choice");
             break;
         } // end switch
-    }     // end while
+    } // end while
 
     fclose(cfPtr); // fclose closes the file
 } // end main
@@ -91,10 +96,10 @@ void textFile(FILE *readPtr)
                 fprintf(writePtr, "%-6d%-16s%-11s%10.2f\n", client.acctNum, client.lastName, client.firstName,
                         client.balance);
             } // end if
-        }     // end while
+        } // end while
 
         fclose(writePtr); // fclose closes the file
-    }                     // end else
+    } // end else
 } // end function textFile
 
 // update balance in record
@@ -131,9 +136,9 @@ void updateRecord(FILE *fPtr)
 
         // move file pointer to correct record in file
         // move back by 1 record length
-        fseek(fPtr, -sizeof(struct clientData), SEEK_CUR);
+        fseek(fPtr, -(long)sizeof(struct clientData), SEEK_CUR);
         // write updated record over old record in file
-        fwrite(&client,sizeof(struct clientData), 1, fPtr);
+        fwrite(&client, sizeof(struct clientData), 1, fPtr);
     } // end else
 } // end function updateRecord
 
@@ -172,10 +177,15 @@ void newRecord(FILE *fPtr)
     // create clientData with default information
     struct clientData client = {0, "", "", 0.0};
     unsigned int accountNum; // account number
+    char balanceInput[50];
+    char *endPtr;
 
     // obtain number of account to create
-    printf("%s", "Enter new account number ( 1 - 100 ): ");
-    scanf("%d", &accountNum);
+    if (!readValidAccountNumber(&accountNum, "Enter new account number ( 1 - 100 ): "))
+    {
+        puts("Invalid input. Could not read account number.");
+        return;
+    }
 
     // move file pointer to correct record in file
     fseek(fPtr, (accountNum - 1) * sizeof(struct clientData), SEEK_SET);
@@ -188,9 +198,60 @@ void newRecord(FILE *fPtr)
     } // end if
     else
     { // create record
-        // user enters last name, first name and balance
-        printf("%s", "Enter lastname, firstname, balance\n? ");
-        scanf("%14s%9s%lf", client.lastName, client.firstName, &client.balance);
+        // user enters last name with letters only
+        while (1)
+        {
+            printf("%s", "Enter last name (letters only): ");
+            if (scanf("%14s", client.lastName) != 1)
+            {
+                puts("Input ended unexpectedly.");
+                return;
+            }
+
+            if (isAllLetters(client.lastName))
+            {
+                break;
+            }
+
+            puts("Error: last name should contain only letters.");
+        }
+
+        // user enters first name with letters only
+        while (1)
+        {
+            printf("%s", "Enter first name (letters only): ");
+            if (scanf("%9s", client.firstName) != 1)
+            {
+                puts("Input ended unexpectedly.");
+                return;
+            }
+
+            if (isAllLetters(client.firstName))
+            {
+                break;
+            }
+
+            puts("Error: first name should contain only letters.");
+        }
+
+        // user enters numeric balance
+        while (1)
+        {
+            printf("%s", "Enter balance: ");
+            if (scanf("%49s", balanceInput) != 1)
+            {
+                puts("Input ended unexpectedly.");
+                return;
+            }
+
+            client.balance = strtod(balanceInput, &endPtr);
+            if (endPtr != balanceInput && *endPtr == '\0')
+            {
+                break;
+            }
+
+            puts("Error: balance should be a valid number.");
+        }
 
         client.acctNum = accountNum;
         // move file pointer to correct record in file
@@ -199,6 +260,82 @@ void newRecord(FILE *fPtr)
         fwrite(&client, sizeof(struct clientData), 1, fPtr);
     } // end else
 } // end function newRecord
+
+int isAllDigits(const char *text)
+{
+    size_t index;
+
+    if (text == NULL || text[0] == '\0')
+    {
+        return 0;
+    }
+
+    for (index = 0; text[index] != '\0'; ++index)
+    {
+        if (!isdigit((unsigned char)text[index]))
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+int isAllLetters(const char *text)
+{
+    size_t index;
+
+    if (text == NULL || text[0] == '\0')
+    {
+        return 0;
+    }
+
+    for (index = 0; text[index] != '\0'; ++index)
+    {
+        if (!isalpha((unsigned char)text[index]))
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+int readValidAccountNumber(unsigned int *accountNum, const char *prompt)
+{
+    char accountInput[30];
+    unsigned long parsedValue;
+
+    if (accountNum == NULL)
+    {
+        return 0;
+    }
+
+    while (1)
+    {
+        printf("%s", prompt);
+        if (scanf("%29s", accountInput) != 1)
+        {
+            return 0;
+        }
+
+        if (!isAllDigits(accountInput))
+        {
+            puts("Error: account number should contain only digits.");
+            continue;
+        }
+
+        parsedValue = strtoul(accountInput, NULL, 10);
+        if (parsedValue < 1 || parsedValue > 100)
+        {
+            puts("Error: account number must be between 1 and 100.");
+            continue;
+        }
+
+        *accountNum = (unsigned int)parsedValue;
+        return 1;
+    }
+}
 
 // enable user to input menu choice
 unsigned int enterChoice(void)
